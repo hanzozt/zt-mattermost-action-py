@@ -104,6 +104,30 @@ jobs:
                 python /app/zhook.py;
             '
 
+      - name: Run as Docker Action with Core Dumps
+        if: |
+          github.repository_owner == 'openziti'
+          && ((github.event_name != 'pull_request_review')
+          || (github.event_name == 'pull_request_review' && github.event.review.state == 'approved'))
+        shell: bash
+        run: |
+          set -o pipefail
+          set -o xtrace
+          docker build -t zhook-action .
+          docker run --rm \
+            -v "${{ github.workspace }}:${{ github.workspace }}" \
+            -w "${{ github.workspace }}" \
+            -e INPUT_ZITIID="${{ secrets.ZITI_MATTERMOST_IDENTITY }}" \
+            -e INPUT_WEBHOOKURL="${{ secrets.ZHOOK_URL_DEV_NOTIFICATIONS }}" \
+            -e INPUT_EVENTJSON='${{ toJson(github.event) }}' \
+            -e INPUT_SENDERUSERNAME="GitHubZ" \
+            -e INPUT_ZITILOGLEVEL="6" \
+            --entrypoint /bin/sh \
+            zhook-action -xc "
+              ulimit -c unlimited
+              exec /app/zhook.py
+            "
+
       - uses: ./
         name: Run as a GH Action from the Local Checkout
         if: |
