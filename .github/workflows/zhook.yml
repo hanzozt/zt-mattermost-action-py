@@ -121,7 +121,6 @@ jobs:
           set -o pipefail
           set -o xtrace
           
-          # Create environment file for Docker
           cat > /tmp/docker.env << 'EOF'
           INPUT_ZITIID=${INPUT_ZITIID}
           INPUT_WEBHOOKURL=${INPUT_WEBHOOKURL}
