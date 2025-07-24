@@ -104,7 +104,7 @@ jobs:
                 python /app/zhook.py;
             '
 
-      - name: Run as Docker Action with Core Dumps
+      - name: Run in Docker with Core Dumps
         if: |
           github.repository_owner == 'openziti'
           && ((github.event_name != 'pull_request_review')
@@ -117,11 +117,11 @@ jobs:
           docker run --rm \
             -v "${{ github.workspace }}:${{ github.workspace }}" \
             -w "${{ github.workspace }}" \
-            -e INPUT_ZITIID="${{ secrets.ZITI_MATTERMOST_IDENTITY }}" \
-            -e INPUT_WEBHOOKURL="${{ secrets.ZHOOK_URL_DEV_NOTIFICATIONS }}" \
-            -e INPUT_EVENTJSON='${{ toJson(github.event) }}' \
-            -e INPUT_SENDERUSERNAME="GitHubZ" \
-            -e INPUT_ZITILOGLEVEL="6" \
+            -e "INPUT_ZITIID=${{ secrets.ZITI_MATTERMOST_IDENTITY }}" \
+            -e "INPUT_WEBHOOKURL=${{ secrets.ZHOOK_URL_DEV_NOTIFICATIONS }}" \
+            -e "INPUT_EVENTJSON=${{ toJson(github.event) }}" \
+            -e "INPUT_SENDERUSERNAME=GitHubZ" \
+            -e "INPUT_ZITILOGLEVEL=6" \
             --entrypoint /bin/sh \
             zhook-action -xc "
               ulimit -c unlimited
