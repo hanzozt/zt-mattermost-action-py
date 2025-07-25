@@ -128,19 +128,28 @@ jobs:
           INPUT_SENDERUSERNAME="${INPUT_SENDERUSERNAME}"
           INPUT_SENDERICONURL="${INPUT_SENDERICONURL}"
           INPUT_ZITILOGLEVEL="${INPUT_ZITILOGLEVEL}"
+          GITHUB_WORKSPACE="${GITHUB_WORKSPACE}"
           EOF
           
+          # configure the kernel to write core dumps to the workspace directory that is writable by the container
+          sudo sysctl -w kernel.core_pattern="${GITHUB_WORKSPACE}/core.%e.%p.%t"
+
+          # build the action's container image so we can source it for the debug image
           docker build -t zhook-action .
           docker build -t zhook-action-dbg -f debug.Dockerfile .
           docker run --rm \
-            -v "${{ github.workspace }}:${{ github.workspace }}" \
-            -w "${{ github.workspace }}" \
+            --volume "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" \
+            --workdir "${GITHUB_WORKSPACE}" \
             --env-file /tmp/docker.env \
-            --entrypoint /bin/bash \
-            zhook-action-dbg -xc "
-              ulimit -c unlimited
-              exec /app/zhook.py
-            "
+            --entrypoint=/bin/bash \
+            zhook-action-dbg -euxo pipefail -c '
+              ulimit -c unlimited;
+              exec valgrind \
+                --verbose \
+                --log-file=${GITHUB_WORKSPACE}/docker-valgrind-%p-%n.log \
+                --leak-check=yes \
+                python /app/zhook.py;
+            '
 
       - uses: ./
         name: Run as a GH Action from the Local Checkout
