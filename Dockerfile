@@ -2,7 +2,7 @@ FROM python:3.11-bullseye AS builder
 ADD . /app
 WORKDIR /app
 
-RUN pip install --target=/app requests openziti==0.8.1
+RUN pip install --target=/app requests openziti==0.7.2
 
 # https://github.com/GoogleContainerTools/distroless
 FROM gcr.io/distroless/python3-debian11
