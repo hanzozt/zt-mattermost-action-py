@@ -3,7 +3,13 @@ import openziti
 import json
 import os
 import sys
+import faulthandler
+import signal
 
+# Enable faulthandler for all threads and catch SIGSEGV/SIGABRT
+faulthandler.enable(all_threads=True)
+faulthandler.register(signal.SIGSEGV, all_threads=True, chain=True)
+faulthandler.register(signal.SIGABRT, all_threads=True, chain=True)
 
 class MattermostWebhookBody:
   actionRepoIcon = "https://github.com/openziti/branding/blob/main/images/ziggy/png/Ziggy-Gits-It.png?raw=true"
