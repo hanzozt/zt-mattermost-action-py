@@ -3,6 +3,7 @@ import openziti
 import json
 import sys
 import os
+from urllib3.exceptions import NameResolutionError
 
 
 class MattermostWebhookBody:
@@ -33,12 +34,12 @@ class MattermostWebhookBody:
     self.senderJson = self.eventJson["sender"]
 
     self.body = {
-      # "username": self.username,
-      # "icon_url": self.icon,
-      "username": self.senderJson['login'],
-      "icon_url": self.senderJson['avatar_url'],
-      "channel": self.channel,
-      "props": {"card": f"```json\n{self.eventJsonStr}\n```"},
+        # "username": self.username,
+        # "icon_url": self.icon,
+        "username": self.senderJson['login'],
+        "icon_url": self.senderJson['avatar_url'],
+        "channel": self.channel,
+        "props": {"card": f"```json\n{self.eventJsonStr}\n```"}
     }
 
     # self.attachment = {
@@ -86,7 +87,7 @@ class MattermostWebhookBody:
     # starCount = self.repoJson["stargazers_count"]
     # starUrl = f"{repoUrl}/stargazers"
 
-    title = f"{self.eventName.capitalize().replace('_',' ')}"
+    title = f"{self.eventName.capitalize().replace('_', ' ')}"
 
     try:
       action = self.eventJson["action"]
@@ -344,10 +345,52 @@ class MattermostWebhookBody:
   def addDefaultDetails(self):
     self.attachment["color"] = self.todoColor
     self.attachment["text"] = self.createTitle()
-    self.attachment["fallback"] = f"{eventName.capitalize().replace('_',' ')} by {self.senderJson['login']} in {self.repoJson['full_name']}"
+    self.attachment["fallback"] = f"{eventName.capitalize().replace('_', ' ')} by {self.senderJson['login']} in {self.repoJson['full_name']}"
 
   def dumpJson(self):
     return json.dumps(self.body)
+
+
+def redact_url_path(url):
+  """Redact sensitive path information from URL for logging"""
+  try:
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    # Keep scheme, hostname, and port, but redact the path
+    redacted = f"{parsed.scheme}://{parsed.netloc}/[REDACTED]"
+    return redacted
+  except Exception:
+    # Fallback: just show the hostname
+    try:
+      hostname = url.split('//')[1].split('/')[0]
+      return f"[SCHEME]://{hostname}/[REDACTED]"
+    except Exception:
+      return "[REDACTED_URL]"
+
+
+def validate_ziti_identity(identity_content):
+  """Validate that the Ziti identity is properly formatted JSON"""
+  try:
+    identity_data = json.loads(identity_content)
+
+    # Check for required fields in a Ziti identity
+    required_fields = ['ztAPI', 'id']
+    for field in required_fields:
+      if field not in identity_data:
+        print(f"Warning: Ziti identity missing required field: {field}")
+        return False
+
+    print("Ziti identity validation successful")
+    print(f"Identity ID: {identity_data.get('id', {}).get('name', 'Unknown')}")
+    print(f"Controller URL: {identity_data.get('ztAPI', 'Unknown')}")
+    return True
+
+  except json.JSONDecodeError as e:
+    print(f"Error: Ziti identity is not valid JSON: {e}")
+    return False
+  except Exception as e:
+    print(f"Error validating Ziti identity: {e}")
+    return False
 
 
 if __name__ == '__main__':
@@ -360,11 +403,28 @@ if __name__ == '__main__':
   actionRepo = os.getenv("GITHUB_ACTION_REPOSITORY")
   eventName = os.getenv("GITHUB_EVENT_NAME")
 
+  # Validate required environment variables
+  if not zitiId:
+    print("Error: INPUT_ZITIID environment variable is required")
+    sys.exit(-1)
+  if not url:
+    print("Error: INPUT_WEBHOOKURL environment variable is required")
+    sys.exit(-1)
+
+  # Validate Ziti identity before proceeding
+  print("Validating Ziti identity...")
+  if not validate_ziti_identity(zitiId):
+    print("Error: Invalid Ziti identity provided")
+    sys.exit(-1)
+
   # Setup Ziti identity
   idFilename = "id.json"
   os.environ["ZITI_IDENTITIES"] = idFilename
   with open(idFilename, 'w') as f:
     f.write(zitiId)
+
+  print(f"Ziti identity file created: {idFilename}")
+  print(f"Target webhook URL: {redact_url_path(url)}")
 
   # Create webhook body
   try:
@@ -376,14 +436,37 @@ if __name__ == '__main__':
   # Post the webhook over Ziti
   headers = {'Content-Type': 'application/json'}
   data = mwb.dumpJson()
-  print(f"{data}")
+  print(f"Webhook payload: {data}")
 
+  print("Attempting to connect via Ziti...")
   with openziti.monkeypatch():
     try:
-      r = requests.post(url, headers=headers, data=data)
+      print(f"Making monkeypatched POST request via Ziti to: {redact_url_path(url)}")
+      r = requests.post(url, headers=headers, data=data, timeout=30)
       print(f"Response Status: {r.status_code}")
-      print(r.headers)
-      print(r.content)
+      print(f"Response Headers: {r.headers}")
+      print(f"Response Content: {r.content}")
+    except NameResolutionError as nre:
+      hostname = url.split('//')[1].split('/')[0].split(':')[0]
+      print(f"DNS resolution failed for hostname: {hostname}")
+      print("This indicates a Ziti service resolution issue:")
+      print("1. The Ziti service name may not exist in the network")
+      print("2. The Ziti identity doesn't have access to the service")
+      print("3. The Ziti controller or network configuration has issues")
+      print(f"Original error: {nre}")
+      sys.exit(-1)
+    except requests.exceptions.ConnectionError as ce:
+      print(f"Connection error posting webhook: {ce}")
+      print("This usually indicates:")
+      print("1. The Ziti service is not available")
+      print("2. Network connectivity issues")
+      print("3. Service configuration problems")
+      sys.exit(-1)
+    except requests.exceptions.Timeout as te:
+      print(f"Timeout error posting webhook: {te}")
+      print("The request timed out - service may be slow or unreachable")
+      sys.exit(-1)
     except Exception as e:
       print(f"Exception posting webhook: {e}")
+      print(f"Exception type: {type(e).__name__}")
       sys.exit(-1)

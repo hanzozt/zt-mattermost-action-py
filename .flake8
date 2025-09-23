@@ -1,0 +1,3 @@
+[flake8]
+# Ignore line length (E501), indentation errors (E111, E114), and hanging indent (E128)
+ignore = E501, E111, E114, E128
