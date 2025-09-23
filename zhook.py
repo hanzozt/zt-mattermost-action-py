@@ -410,4 +410,4 @@ if __name__ == '__main__':
 
   except Exception as e:
       print(f"Exception in webhook or ziti context: {e}")
-      sys.exit(1)
+      sys.exit(0)
