@@ -388,7 +388,11 @@ if __name__ == '__main__':
 
   with openziti.monkeypatch():
     try:
-      print(f"Posting webhook to {url} with headers {headers} and data {data}")
+      if os.getenv("ZHOOK_DEBUG", "").lower() == "true":
+        print(f"Posting webhook to {url} with headers {headers} and data {data}")
+      else:
+        print(f"Posting webhook to {url} with headers {headers}")
+
       # breakpoint()
       r = requests.post(url, headers=headers, data=data)
       print(f"Response Status: {r.status_code}")
