@@ -124,7 +124,7 @@ jobs:
           cat > /tmp/docker.env << EOF
           INPUT_ZITIID=${INPUT_ZITIID}
           INPUT_WEBHOOKURL=${INPUT_WEBHOOKURL}
-          INPUT_EVENTJSON=${INPUT_EVENTJSON}
+          INPUT_EVENTJSON=$(base64 -w 0 <<< '${{ toJson(github.event) }}')
           INPUT_SENDERUSERNAME=${INPUT_SENDERUSERNAME}
           INPUT_SENDERICONURL=${INPUT_SENDERICONURL}
           INPUT_ZITILOGLEVEL=${INPUT_ZITILOGLEVEL}
