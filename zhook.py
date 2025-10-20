@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
+import argparse
 import base64
 import json
 import os
-import base64
+import sys
 
 import openziti
 import requests
@@ -400,6 +401,127 @@ def _safe_hint(s):
   return f"len={hint_len}, startswith='{head}...'"
 
 
+def generate_json_schema(obj, max_depth=10, current_depth=0):
+  """Generate a schema representation of a JSON object by inferring types from values."""
+  if current_depth >= max_depth:
+    return "<max_depth_reached>"
+
+  if obj is None:
+    return "null"
+  elif isinstance(obj, bool):
+    return "boolean"
+  elif isinstance(obj, int):
+    return "integer"
+  elif isinstance(obj, float):
+    return "number"
+  elif isinstance(obj, str):
+    return "string"
+  elif isinstance(obj, list):
+    if len(obj) == 0:
+      return "array[]"
+    # Get schema of first element as representative
+    element_schema = generate_json_schema(obj[0], max_depth, current_depth + 1)
+    return f"array[{element_schema}]"
+  elif isinstance(obj, dict):
+    schema = {}
+    for key, value in obj.items():
+      schema[key] = generate_json_schema(value, max_depth, current_depth + 1)
+    return schema
+  else:
+    return "unknown"
+
+
+def generate_test_event(event_type):
+  """Generate a test GitHub event JSON for the specified event type."""
+  base_repo = {
+    "full_name": "testuser/testrepo",
+    "html_url": "https://github.com/testuser/testrepo",
+    "stargazers_count": 42
+  }
+  
+  base_sender = {
+    "login": "testuser",
+    "avatar_url": "https://avatars.githubusercontent.com/u/12345",
+    "html_url": "https://github.com/testuser",
+    "url": "https://api.github.com/users/testuser"
+  }
+  
+  events = {
+    "push": {
+      "repository": base_repo,
+      "sender": base_sender,
+      "forced": False,
+      "commits": [
+        {
+          "id": "abc123def456",
+          "url": "https://github.com/testuser/testrepo/commit/abc123",
+          "message": "Test commit message"
+        }
+      ],
+      "compare": "https://github.com/testuser/testrepo/compare/abc123..def456",
+      "ref": "refs/heads/main"
+    },
+    "pull_request": {
+      "action": "opened",
+      "repository": base_repo,
+      "sender": base_sender,
+      "pull_request": {
+        "number": 123,
+        "title": "Test Pull Request",
+        "html_url": "https://github.com/testuser/testrepo/pull/123",
+        "body": "This is a test PR description",
+        "head": {"label": "testuser:feature-branch"},
+        "base": {"label": "testuser:main"},
+        "requested_reviewers": []
+      }
+    },
+    "issues": {
+      "action": "opened",
+      "repository": base_repo,
+      "sender": base_sender,
+      "issue": {
+        "number": 456,
+        "title": "Test Issue",
+        "html_url": "https://github.com/testuser/testrepo/issues/456",
+        "body": "This is a test issue description",
+        "assignees": []
+      }
+    },
+    "release": {
+      "action": "released",
+      "repository": base_repo,
+      "sender": base_sender,
+      "release": {
+        "name": "v1.0.0",
+        "tag_name": "v1.0.0",
+        "html_url": "https://github.com/testuser/testrepo/releases/tag/v1.0.0",
+        "body": "## What's Changed\n- Feature A\n- Bug fix B",
+        "draft": False,
+        "prerelease": False
+      }
+    },
+    "watch": {
+      "action": "started",
+      "repository": base_repo,
+      "sender": base_sender
+    },
+    "fork": {
+      "repository": base_repo,
+      "sender": base_sender,
+      "forkee": {
+        "full_name": "anotheruser/testrepo",
+        "html_url": "https://github.com/anotheruser/testrepo"
+      }
+    }
+  }
+  
+  if event_type not in events:
+    available = ", ".join(sorted(events.keys()))
+    raise ValueError(f"Unknown event type: {event_type}. Available: {available}")
+  
+  return json.dumps(events[event_type])
+
+
 @openziti.zitify()
 def doPost(url, payload):
   """Post webhook payload to the specified URL over Ziti."""
@@ -412,6 +534,76 @@ def doPost(url, payload):
 
 
 if __name__ == '__main__':
+  # Parse command-line arguments
+  parser = argparse.ArgumentParser(
+    description='Post GitHub events to Mattermost over Ziti',
+    epilog='''
+Environment Variables (set by GitHub Actions or manually for testing):
+
+Required:
+  INPUT_ZITIID              Ziti identity JSON (from: secrets.ZITI_IDENTITY)
+                            Alternative: INPUT_ZITIJWT for enrollment JWT
+  INPUT_WEBHOOKURL          Mattermost webhook URL (from: secrets.WEBHOOK_URL)
+  INPUT_EVENTJSON           GitHub event JSON (from: toJson(github.event))
+  GITHUB_EVENT_NAME         Event type (from: github.event_name)
+                            Examples: push, pull_request, issues, release
+
+Optional:
+  INPUT_SENDERUSERNAME      Mattermost username (default: sender.login from event)
+  INPUT_SENDERICONURL       Icon URL (default: sender.avatar_url from event)
+  GITHUB_ACTION_REPOSITORY  Action repo (from: github.action_repository)
+  INPUT_ZITILOGLEVEL        Ziti log level 0-6 (default: 3)
+
+Test Mode Examples:
+  # Quick test with push event
+  INPUT_ZITIID="$(< ziti-id.json)" INPUT_WEBHOOKURL="http://webhook.ziti/hooks/ID" \\
+    python3 zhook.py --test
+
+  # Test pull request with dry-run
+  INPUT_ZITIID="$(< ziti-id.json)" python3 zhook.py --test --event-type pull_request --dry-run
+
+  # List available event types
+  python3 zhook.py --help
+''',
+    formatter_class=argparse.RawDescriptionHelpFormatter
+  )
+  parser.add_argument(
+    '--test',
+    action='store_true',
+    help='Run in test mode with generated event data'
+  )
+  parser.add_argument(
+    '--event-type',
+    default='push',
+    choices=['push', 'pull_request', 'issues', 'release', 'watch', 'fork'],
+    help='Event type for test mode (default: push)'
+  )
+  parser.add_argument(
+    '--dry-run',
+    action='store_true',
+    help='Print the webhook payload without sending it'
+  )
+  
+  args = parser.parse_args()
+  
+  # Test mode: generate dummy data
+  if args.test:
+    print(f"=== TEST MODE: Generating {args.event_type} event ===")
+    if not os.getenv("INPUT_WEBHOOKURL"):
+      os.environ["INPUT_WEBHOOKURL"] = "http://127.0.0.1:2171/post"
+      print(f"Using default webhook URL: {os.environ['INPUT_WEBHOOKURL']}")
+    if not os.getenv("INPUT_ZITIID") and not os.getenv("INPUT_ZITIJWT"):
+      print("ERROR: Test mode requires INPUT_ZITIID or INPUT_ZITIJWT environment variable")
+      print("Set one of these to your Ziti identity JSON or enrollment JWT")
+      sys.exit(1)
+    
+    os.environ["INPUT_EVENTJSON"] = generate_test_event(args.event_type)
+    os.environ["GITHUB_EVENT_NAME"] = args.event_type
+    os.environ["INPUT_SENDERUSERNAME"] = os.getenv("INPUT_SENDERUSERNAME", "TestUser")
+    os.environ["INPUT_SENDERICONURL"] = os.getenv("INPUT_SENDERICONURL", "https://github.com/fluidicon.png")
+    os.environ["GITHUB_ACTION_REPOSITORY"] = os.getenv("GITHUB_ACTION_REPOSITORY", "testuser/testrepo")
+    print("")
+  
   url = os.getenv("INPUT_WEBHOOKURL")
 
   # Handle event JSON provided inline; auto-detect if it's JSON or base64-encoded JSON
@@ -443,14 +635,12 @@ if __name__ == '__main__':
   # Set up Ziti identity
   zitiJwtInput = os.getenv("INPUT_ZITIJWT")
   zitiIdJson = None            # validated JSON string form
-  zitiIdEncoding = None        # validated base64 string form
-  zitiIdContext = None         # deserialized dict
   if zitiJwtInput is not None:
     # Expect enroll to return the identity JSON content
     try:
       enrolled = openziti.enroll(zitiJwtInput)
       # Validate that the returned content is JSON
-      zitiIdContext = json.loads(enrolled)
+      json.loads(enrolled)
       zitiIdJson = enrolled
       print("Obtained valid identity JSON from INPUT_ZITIJWT enrollment")
     except Exception as e:
@@ -463,67 +653,17 @@ if __name__ == '__main__':
     # Prefer valid inline JSON if present
     if zitiIdInput and _try_parse_json(zitiIdInput):
       zitiIdJson = zitiIdInput
-      zitiIdContext = json.loads(zitiIdInput)
       print("Detected valid inline JSON in INPUT_ZITIID")
     else:
       # Try decoding inline as base64 if provided and not valid JSON
       decodedInline = _try_decode_b64_to_json_str(zitiIdInput) if zitiIdInput else None
       if decodedInline is not None:
-        zitiIdEncoding = zitiIdInput
         zitiIdJson = decodedInline
-        zitiIdContext = json.loads(decodedInline)
         print("Detected base64-encoded identity in INPUT_ZITIID and decoded it")
 
     if zitiIdJson is None:
       print("ERROR: no Ziti identity provided, set INPUT_ZITIID (inline JSON or base64-encoded), or INPUT_ZITIJWT")
       exit(1)
-
-  def generate_json_schema(obj, max_depth=10, current_depth=0):
-    """Generate a schema representation of a JSON object by inferring types from values."""
-    if current_depth >= max_depth:
-      return "<max_depth_reached>"
-
-    if obj is None:
-      return "null"
-    elif isinstance(obj, bool):
-      return "boolean"
-    elif isinstance(obj, int):
-      return "integer"
-    elif isinstance(obj, float):
-      return "number"
-    elif isinstance(obj, str):
-      return "string"
-    elif isinstance(obj, list):
-      if len(obj) == 0:
-        return "array[]"
-      # Get schema of first element as representative
-      element_schema = generate_json_schema(obj[0], max_depth, current_depth + 1)
-      return f"array[{element_schema}]"
-    elif isinstance(obj, dict):
-      schema = {}
-      for key, value in obj.items():
-        schema[key] = generate_json_schema(value, max_depth, current_depth + 1)
-      return schema
-    else:
-      # Try decoding inline as base64 if provided and not valid JSON
-      decodedInline = _try_decode_b64_to_json_str(zitiIdInput) if zitiIdInput else None
-      if decodedInline is not None:
-        zitiIdEncoding = zitiIdInput
-        zitiIdJson = decodedInline
-        zitiIdContext = json.loads(decodedInline)
-        print("Detected base64-encoded identity in INPUT_ZITIID and decoded it")
-
-    if zitiIdJson is None:
-      print("ERROR: no Ziti identity provided, set INPUT_ZITIID (inline JSON or base64-encoded), or INPUT_ZITIJWT")
-      exit(1)
-
-  # Keep a small helper for safe string hints (used only in error/debug prints if needed)
-  def _safe_hint(s):
-    if s is None:
-      return "<none>"
-    hint_len = len(s)
-    head = s[:8].replace('\n', ' ')
-    return f"len={hint_len}, startswith='{head}...'"
 
   idFilename = "id.json"
   with open(idFilename, 'w') as f:
@@ -542,6 +682,15 @@ if __name__ == '__main__':
   # Post the webhook over Ziti
   # Build dict payload; requests will set Content-Type when using json=
   payload = mwb.body
+
+  # Dry-run mode: print payload and exit
+  if args.dry_run:
+    print("=== DRY RUN MODE: Webhook payload ===")
+    print(f"URL: {url}")
+    print(f"Payload:")
+    print(json.dumps(payload, indent=2))
+    print("=== Dry run complete (not sent) ===")
+    sys.exit(0)
 
   # Load the identity for Ziti operations
   try:
