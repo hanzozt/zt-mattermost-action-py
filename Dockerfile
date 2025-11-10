@@ -1,4 +1,4 @@
-FROM python:3.11-bullseye
+FROM python:3.11-bullseye AS builder
 
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --target=/app --requirement /tmp/requirements.txt
@@ -9,8 +9,6 @@ COPY --from=builder /app /app
 COPY --chmod=0755 ./zhook.py /app/zhook.py
 WORKDIR /app
 COPY ./zhook.py /app/zhook.py
-
-RUN pip install --no-cache-dir requests openziti
 
 ENV PYTHONPATH=/app
 
