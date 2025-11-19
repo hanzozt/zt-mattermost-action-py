@@ -153,8 +153,7 @@ jobs:
                 python /app/zhook.py;
             '
 
-      - uses: ./
-        name: Run as a GH Action from the Local Checkout
+      - name: Run as a GH Action from the Local Checkout
         if: |
           always()
           && (github.repository_owner == 'openziti' || github.repository_owner == 'netfoundry')
