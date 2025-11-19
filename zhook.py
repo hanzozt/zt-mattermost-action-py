@@ -438,14 +438,14 @@ def generate_test_event(event_type):
     "html_url": "https://github.com/testuser/testrepo",
     "stargazers_count": 42
   }
-  
+
   base_sender = {
     "login": "testuser",
     "avatar_url": "https://avatars.githubusercontent.com/u/12345",
     "html_url": "https://github.com/testuser",
     "url": "https://api.github.com/users/testuser"
   }
-  
+
   events = {
     "push": {
       "repository": base_repo,
@@ -514,11 +514,11 @@ def generate_test_event(event_type):
       }
     }
   }
-  
+
   if event_type not in events:
     available = ", ".join(sorted(events.keys()))
     raise ValueError(f"Unknown event type: {event_type}. Available: {available}")
-  
+
   return json.dumps(events[event_type])
 
 
@@ -583,9 +583,9 @@ Test Mode Examples:
     action='store_true',
     help='Print the webhook payload without sending it'
   )
-  
+
   args = parser.parse_args()
-  
+
   # Test mode: generate dummy data
   if args.test:
     print(f"=== TEST MODE: Generating {args.event_type} event ===")
@@ -596,14 +596,14 @@ Test Mode Examples:
       print("ERROR: Test mode requires INPUT_ZITIID or INPUT_ZITIJWT environment variable")
       print("Set one of these to your Ziti identity JSON or enrollment JWT")
       sys.exit(1)
-    
+
     os.environ["INPUT_EVENTJSON"] = generate_test_event(args.event_type)
     os.environ["GITHUB_EVENT_NAME"] = args.event_type
     os.environ["INPUT_SENDERUSERNAME"] = os.getenv("INPUT_SENDERUSERNAME", "TestUser")
     os.environ["INPUT_SENDERICONURL"] = os.getenv("INPUT_SENDERICONURL", "https://github.com/fluidicon.png")
     os.environ["GITHUB_ACTION_REPOSITORY"] = os.getenv("GITHUB_ACTION_REPOSITORY", "testuser/testrepo")
     print("")
-  
+
   url = os.getenv("INPUT_WEBHOOKURL")
 
   # Handle event JSON provided inline; auto-detect if it's JSON or base64-encoded JSON
@@ -687,7 +687,7 @@ Test Mode Examples:
   if args.dry_run:
     print("=== DRY RUN MODE: Webhook payload ===")
     print(f"URL: {url}")
-    print(f"Payload:")
+    print("Payload:")
     print(json.dumps(payload, indent=2))
     print("=== Dry run complete (not sent) ===")
     sys.exit(0)
