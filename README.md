@@ -105,35 +105,10 @@ GITHUB_EVENT_NAME="push" \
 python3 zhook.py
 ```
 
-## Updating the Container
+## Container Image
 
+The Action's Docker image is built in-place by the calling GitHub Action runner and cached for subsequent runs.
 
-**1. Build the container**
-```
-docker build -t ghcr.io/openziti/ziti-mattermost-action-py:latest .
-```
+This is configured in action.yml with `image: Dockerfile` and ensures the Dockerfile in the repository at the called Git ref is used to build the image and run the action.
 
-**2. Generate PAT with scopes**
-
-* go to https://github.com/settings/tokens
-* choose "Tokens(classic)"
-* Choose "Generate new token" and select "Generate new token (classic)" from the dropdown
-* Add note: "GHCR Deploy Token"
-* choose permissions - write:packages (will also end up with read:packages)
-
-**3. Login + push with PAT**
-
-```bash
-  export PAT='ghp_xxxxxx' # copy leading space to (probably) keep it out of your shell history or edit/source a file
-echo "$PAT" | docker login ghcr.io -u dovholuknf --password-stdin
-```
-
-**4. Push the image**
-```
-docker push ghcr.io/openziti/ziti-mattermost-action-py:latest
-```
-
-**5. Revoke PAT**
-
-* go to https://github.com/settings/tokens
-* delete the token you just added (or not whatever)
+This allows the Action to be tested with the exact same image that will be used in the GitHub Action.
