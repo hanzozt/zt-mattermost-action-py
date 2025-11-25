@@ -1,8 +1,13 @@
-import requests
-import openziti
+#!/usr/bin/env python3
+
+import argparse
+import base64
 import json
 import os
 import sys
+
+import openziti
+import requests
 
 
 class MattermostWebhookBody:
@@ -21,24 +26,20 @@ class MattermostWebhookBody:
   todoColor = "#FFFFFF"
   watchColor = "#FFD700"
 
-  def __init__(self, username, icon, channel, eventName, eventJsonStr, actionRepo):
+  def __init__(self, username, icon, eventName, eventJson, actionRepo):
     self.username = username
     self.icon = icon
-    self.channel = channel
     self.eventName = eventName.lower()
-    self.eventJsonStr = eventJsonStr
+    self.eventJson = eventJson
     self.actionRepo = actionRepo
-    self.eventJson = json.loads(eventJsonStr)
-    self.repoJson = self.eventJson["repository"]
-    self.senderJson = self.eventJson["sender"]
+    self.event = json.loads(eventJson)
+    self.repo = self.event["repository"]
+    self.sender = self.event["sender"]
 
     self.body = {
-      # "username": self.username,
-      # "icon_url": self.icon,
-      "username": self.senderJson['login'],
-      "icon_url": self.senderJson['avatar_url'],
-      "channel": self.channel,
-      "props": {"card": f"```json\n{self.eventJsonStr}\n```"},
+      "username": self.sender['login'],
+      "icon_url": self.sender['avatar_url'],
+      "props": {"card": f"```json\n{self.eventJson}\n```"},
     }
 
     # self.attachment = {
@@ -79,17 +80,17 @@ class MattermostWebhookBody:
     self.body["attachments"] = [self.attachment]
 
   def createTitle(self):
-    login = self.senderJson["login"]
-    loginUrl = self.senderJson["html_url"]
-    repoName = self.repoJson["full_name"]
-    repoUrl = self.repoJson["html_url"]
+    login = self.sender["login"]
+    loginUrl = self.sender["html_url"]
+    repoName = self.repo["full_name"]
+    repoUrl = self.repo["html_url"]
     # starCount = self.repoJson["stargazers_count"]
     # starUrl = f"{repoUrl}/stargazers"
 
     title = f"{self.eventName.capitalize().replace('_', ' ')}"
 
     try:
-      action = self.eventJson["action"]
+      action = self.event["action"]
       title += f" {action}"
     except Exception:
       pass
@@ -99,15 +100,15 @@ class MattermostWebhookBody:
 
   def addPushDetails(self):
     self.body["text"] = self.createTitle()
-    forced = self.eventJson["forced"]
-    commits = self.eventJson["commits"]
+    forced = self.event["forced"]
+    commits = self.event["commits"]
 
     if forced:
       pushBody = "Force-pushed "
     else:
       pushBody = "Pushed "
 
-    pushBody += f"[{len(commits)} commit(s)]({self.eventJson['compare']}) to {self.eventJson['ref']}"
+    pushBody += f"[{len(commits)} commit(s)]({self.event['compare']}) to {self.event['ref']}"
     for c in commits:
       pushBody += f"\n[`{c['id'][:6]}`]({c['url']}) {c['message']}"
     self.attachment["color"] = self.pushColor
@@ -115,7 +116,7 @@ class MattermostWebhookBody:
 
   def addPullRequestDetails(self):
     self.body["text"] = self.createTitle()
-    prJson = self.eventJson["pull_request"]
+    prJson = self.event["pull_request"]
     headJson = prJson["head"]
     baseJson = prJson["base"]
     self.attachment["color"] = self.prColor
@@ -155,8 +156,8 @@ class MattermostWebhookBody:
 
   def addPullRequestReviewCommentDetails(self):
     self.body["text"] = self.createTitle()
-    commentJson = self.eventJson["comment"]
-    prJson = self.eventJson['pull_request']
+    commentJson = self.event["comment"]
+    prJson = self.event['pull_request']
     bodyTxt = f"[Comment]({commentJson['html_url']}) in [PR#{prJson['number']}: {prJson['title']}]({prJson['html_url']}):\n"
 
     try:
@@ -169,9 +170,9 @@ class MattermostWebhookBody:
 
   def addPullRequestReviewDetails(self):
     self.body["text"] = self.createTitle()
-    reviewJson = self.eventJson["review"]
+    reviewJson = self.event["review"]
     reviewState = reviewJson['state']
-    prJson = self.eventJson['pull_request']
+    prJson = self.event['pull_request']
     bodyTxt = f"[Review]({reviewJson['html_url']}) of [PR#{prJson['number']}: {prJson['title']}]({prJson['html_url']})\n"
     bodyTxt += f"Review State: {reviewState.capitalize()}\n"
     bodyTxt += f"{reviewJson['body']}"
@@ -183,16 +184,16 @@ class MattermostWebhookBody:
 
   def addDeleteDetails(self):
     self.body["text"] = self.createTitle()
-    self.attachment["text"] = f"Deleted {self.eventJson['ref_type']} \"{self.eventJson['ref']}\""
+    self.attachment["text"] = f"Deleted {self.event['ref_type']} \"{self.event['ref']}\""
 
   def addCreateDetails(self):
     self.body["text"] = self.createTitle()
-    self.attachment["text"] = f"Created {self.eventJson['ref_type']} \"{self.eventJson['ref']}\""
+    self.attachment["text"] = f"Created {self.event['ref_type']} \"{self.event['ref']}\""
 
   def addIssuesDetails(self):
     self.body["text"] = self.createTitle()
-    action = self.eventJson["action"]
-    issueJson = self.eventJson["issue"]
+    action = self.event["action"]
+    issueJson = self.event["issue"]
     issueTitle = issueJson["title"]
     issueUrl = issueJson["html_url"]
     issueBody = issueJson["body"]
@@ -217,10 +218,10 @@ class MattermostWebhookBody:
 
   def addIssueCommentDetails(self):
     self.body["text"] = self.createTitle()
-    commentJson = self.eventJson["comment"]
+    commentJson = self.event["comment"]
     commentBody = commentJson["body"]
     commentUrl = commentJson["html_url"]
-    issueJson = self.eventJson["issue"]
+    issueJson = self.event["issue"]
     issueTitle = issueJson["title"]
     issueNumber = issueJson["number"]
 
@@ -237,14 +238,14 @@ class MattermostWebhookBody:
 
   def addForkDetails(self):
     self.body["text"] = self.createTitle()
-    forkeeJson = self.eventJson["forkee"]
+    forkeeJson = self.event["forkee"]
     bodyText = f"Forkee [{forkeeJson['full_name']}]({forkeeJson['html_url']})"
     self.attachment["text"] = bodyText
 
   def addReleaseDetails(self):
     self.body["text"] = self.createTitle()
-    action = self.eventJson["action"]
-    releaseJson = self.eventJson["release"]
+    action = self.event["action"]
+    releaseJson = self.event["release"]
     isDraft = releaseJson["draft"]
     isPrerelease = releaseJson["prerelease"]
 
@@ -277,10 +278,10 @@ class MattermostWebhookBody:
 
   def addWatchDetails(self):
     self.body["text"] = f"{self.createTitle()} #stargazer"
-    login = self.senderJson["login"]
-    loginUrl = self.senderJson["html_url"]
-    userUrl = self.senderJson["url"]
-    starCount = self.repoJson["stargazers_count"]
+    login = self.sender["login"]
+    loginUrl = self.sender["html_url"]
+    userUrl = self.sender["url"]
+    starCount = self.repo["stargazers_count"]
 
     bodyText = f"[{login}]({loginUrl}) is stargazer number {starCount}\n\n"
 
@@ -344,70 +345,366 @@ class MattermostWebhookBody:
   def addDefaultDetails(self):
     self.attachment["color"] = self.todoColor
     self.attachment["text"] = self.createTitle()
-    self.attachment["fallback"] = f"{eventName.capitalize().replace('_', ' ')} by {self.senderJson['login']} in {self.repoJson['full_name']}"
+    self.attachment["fallback"] = f"{self.eventName.capitalize().replace('_', ' ')} by {self.sender['login']} in {self.repo['full_name']}"
 
   def dumpJson(self):
     return json.dumps(self.body)
 
 
+def _try_parse_json(s: str):
+  """Try to parse a string as JSON and return True if successful."""
+  try:
+    json.loads(s)
+    return True
+  except Exception:
+    return False
+
+
+def _try_decode_b64_to_json_str(s: str):
+  """Try to decode a base64 string to a JSON string with various fallback strategies."""
+  if s is None:
+    return None
+  try:
+    # strict validation first
+    decoded = base64.b64decode(s, validate=True)
+    decoded_str = decoded.decode('utf-8')
+    if _try_parse_json(decoded_str):
+      return decoded_str
+  except Exception:
+    # Try non-strict decode
+    try:
+      decoded = base64.b64decode(s)
+      decoded_str = decoded.decode('utf-8')
+      if _try_parse_json(decoded_str):
+        return decoded_str
+    except Exception:
+      pass
+    # As a last resort, try appending one to four '=' padding chars
+    for i in range(1, 5):
+      try:
+        s_padded = s + ("=" * i)
+        decoded = base64.b64decode(s_padded)
+        decoded_str = decoded.decode('utf-8')
+        if _try_parse_json(decoded_str):
+          return decoded_str
+      except Exception:
+        continue
+  return None
+
+
+def _safe_hint(s):
+  """Create a safe string hint for debugging purposes."""
+  if s is None:
+    return "<none>"
+  hint_len = len(s)
+  head = s[:8].replace('\n', ' ')
+  return f"len={hint_len}, startswith='{head}...'"
+
+
+def generate_json_schema(obj, max_depth=10, current_depth=0):
+  """Generate a schema representation of a JSON object by inferring types from values."""
+  if current_depth >= max_depth:
+    return "<max_depth_reached>"
+
+  if obj is None:
+    return "null"
+  elif isinstance(obj, bool):
+    return "boolean"
+  elif isinstance(obj, int):
+    return "integer"
+  elif isinstance(obj, float):
+    return "number"
+  elif isinstance(obj, str):
+    return "string"
+  elif isinstance(obj, list):
+    if len(obj) == 0:
+      return "array[]"
+    # Get schema of first element as representative
+    element_schema = generate_json_schema(obj[0], max_depth, current_depth + 1)
+    return f"array[{element_schema}]"
+  elif isinstance(obj, dict):
+    schema = {}
+    for key, value in obj.items():
+      schema[key] = generate_json_schema(value, max_depth, current_depth + 1)
+    return schema
+  else:
+    return "unknown"
+
+
+def generate_test_event(event_type):
+  """Generate a test GitHub event JSON for the specified event type."""
+  base_repo = {
+    "full_name": "testuser/testrepo",
+    "html_url": "https://github.com/testuser/testrepo",
+    "stargazers_count": 42
+  }
+
+  base_sender = {
+    "login": "testuser",
+    "avatar_url": "https://avatars.githubusercontent.com/u/12345",
+    "html_url": "https://github.com/testuser",
+    "url": "https://api.github.com/users/testuser"
+  }
+
+  events = {
+    "push": {
+      "repository": base_repo,
+      "sender": base_sender,
+      "forced": False,
+      "commits": [
+        {
+          "id": "abc123def456",
+          "url": "https://github.com/testuser/testrepo/commit/abc123",
+          "message": "Test commit message"
+        }
+      ],
+      "compare": "https://github.com/testuser/testrepo/compare/abc123..def456",
+      "ref": "refs/heads/main"
+    },
+    "pull_request": {
+      "action": "opened",
+      "repository": base_repo,
+      "sender": base_sender,
+      "pull_request": {
+        "number": 123,
+        "title": "Test Pull Request",
+        "html_url": "https://github.com/testuser/testrepo/pull/123",
+        "body": "This is a test PR description",
+        "head": {"label": "testuser:feature-branch"},
+        "base": {"label": "testuser:main"},
+        "requested_reviewers": []
+      }
+    },
+    "issues": {
+      "action": "opened",
+      "repository": base_repo,
+      "sender": base_sender,
+      "issue": {
+        "number": 456,
+        "title": "Test Issue",
+        "html_url": "https://github.com/testuser/testrepo/issues/456",
+        "body": "This is a test issue description",
+        "assignees": []
+      }
+    },
+    "release": {
+      "action": "released",
+      "repository": base_repo,
+      "sender": base_sender,
+      "release": {
+        "name": "v1.0.0",
+        "tag_name": "v1.0.0",
+        "html_url": "https://github.com/testuser/testrepo/releases/tag/v1.0.0",
+        "body": "## What's Changed\n- Feature A\n- Bug fix B",
+        "draft": False,
+        "prerelease": False
+      }
+    },
+    "watch": {
+      "action": "started",
+      "repository": base_repo,
+      "sender": base_sender
+    },
+    "fork": {
+      "repository": base_repo,
+      "sender": base_sender,
+      "forkee": {
+        "full_name": "anotheruser/testrepo",
+        "html_url": "https://github.com/anotheruser/testrepo"
+      }
+    }
+  }
+
+  if event_type not in events:
+    available = ", ".join(sorted(events.keys()))
+    raise ValueError(f"Unknown event type: {event_type}. Available: {available}")
+
+  return json.dumps(events[event_type])
+
+
+@openziti.zitify()
+def doPost(url, payload):
+  """Post webhook payload to the specified URL over Ziti."""
+  # Single request doesn't need session management
+  response = requests.post(url, json=payload)
+  print(f"Response Status: {response.status_code}")
+  print(response.headers)
+  print(response.content)
+  return response
+
+
 if __name__ == '__main__':
+  # Parse command-line arguments
+  parser = argparse.ArgumentParser(
+    description='Post GitHub events to Mattermost over Ziti',
+    epilog='''
+Environment Variables (set by GitHub Actions or manually for testing):
+
+Required:
+  INPUT_ZITIID              Ziti identity JSON (from: secrets.ZITI_IDENTITY)
+                            Alternative: INPUT_ZITIJWT for enrollment JWT
+  INPUT_WEBHOOKURL          Mattermost webhook URL (from: secrets.WEBHOOK_URL)
+  INPUT_EVENTJSON           GitHub event JSON (from: toJson(github.event))
+  GITHUB_EVENT_NAME         Event type (from: github.event_name)
+                            Examples: push, pull_request, issues, release
+
+Optional:
+  INPUT_SENDERUSERNAME      Mattermost username (default: sender.login from event)
+  INPUT_SENDERICONURL       Icon URL (default: sender.avatar_url from event)
+  GITHUB_ACTION_REPOSITORY  Action repo (from: github.action_repository)
+  INPUT_ZITILOGLEVEL        Ziti log level 0-6 (default: 3)
+
+Test Mode Examples:
+  # Quick test with push event
+  INPUT_ZITIID="$(< ziti-id.json)" INPUT_WEBHOOKURL="http://webhook.ziti/hooks/ID" \\
+    python3 zhook.py --test
+
+  # Test pull request with dry-run
+  INPUT_ZITIID="$(< ziti-id.json)" python3 zhook.py --test --event-type pull_request --dry-run
+
+  # List available event types
+  python3 zhook.py --help
+''',
+    formatter_class=argparse.RawDescriptionHelpFormatter
+  )
+  parser.add_argument(
+    '--test',
+    action='store_true',
+    help='Run in test mode with generated event data'
+  )
+  parser.add_argument(
+    '--event-type',
+    default='push',
+    choices=['push', 'pull_request', 'issues', 'release', 'watch', 'fork'],
+    help='Event type for test mode (default: push)'
+  )
+  parser.add_argument(
+    '--dry-run',
+    action='store_true',
+    help='Print the webhook payload without sending it'
+  )
+
+  args = parser.parse_args()
+
+  # Test mode: generate dummy data
+  if args.test:
+    print(f"=== TEST MODE: Generating {args.event_type} event ===")
+    if not os.getenv("INPUT_WEBHOOKURL"):
+      os.environ["INPUT_WEBHOOKURL"] = "http://127.0.0.1:2171/post"
+      print(f"Using default webhook URL: {os.environ['INPUT_WEBHOOKURL']}")
+    if not os.getenv("INPUT_ZITIID") and not os.getenv("INPUT_ZITIJWT"):
+      print("ERROR: Test mode requires INPUT_ZITIID or INPUT_ZITIJWT environment variable")
+      print("Set one of these to your Ziti identity JSON or enrollment JWT")
+      sys.exit(1)
+
+    os.environ["INPUT_EVENTJSON"] = generate_test_event(args.event_type)
+    os.environ["GITHUB_EVENT_NAME"] = args.event_type
+    os.environ["INPUT_SENDERUSERNAME"] = os.getenv("INPUT_SENDERUSERNAME", "TestUser")
+    os.environ["INPUT_SENDERICONURL"] = os.getenv("INPUT_SENDERICONURL", "https://github.com/fluidicon.png")
+    os.environ["GITHUB_ACTION_REPOSITORY"] = os.getenv("GITHUB_ACTION_REPOSITORY", "testuser/testrepo")
+    print("")
+
   url = os.getenv("INPUT_WEBHOOKURL")
-  eventJsonStr = os.getenv("INPUT_EVENTJSON")
+
+  # Handle event JSON provided inline; auto-detect if it's JSON or base64-encoded JSON
+
+  eventInput = os.getenv("INPUT_EVENTJSON")
+  eventJson = ""
+
+  if eventInput and _try_parse_json(eventInput):
+    eventJson = eventInput
+    print("Detected valid JSON in INPUT_EVENTJSON")
+  else:
+    decoded = _try_decode_b64_to_json_str(eventInput)
+    if decoded is not None:
+      eventJson = decoded
+      print("Detected base64-encoded JSON in INPUT_EVENTJSON and decoded it")
+
+  if not eventJson:
+    print("ERROR: No valid event JSON provided in INPUT_EVENTJSON")
+    exit(1)
   username = os.getenv("INPUT_SENDERUSERNAME")
   icon = os.getenv("INPUT_SENDERICONURL")
-  channel = os.getenv("INPUT_DESTCHANNEL")
   actionRepo = os.getenv("GITHUB_ACTION_REPOSITORY")
   eventName = os.getenv("GITHUB_EVENT_NAME")
+  zitiLogLevel = os.getenv("INPUT_ZITILOGLEVEL")
+  if zitiLogLevel is not None:
+    os.environ["ZITI_LOG"] = zitiLogLevel
+    os.environ["TLSUV_DEBUG"] = zitiLogLevel
 
-  # Setup Ziti identity
-  zitiJwt = os.getenv("INPUT_ZITIJWT")
-  if zitiJwt is not None:
-    zitiId = openziti.enroll(zitiJwt)
+  # Set up Ziti identity
+  zitiJwtInput = os.getenv("INPUT_ZITIJWT")
+  zitiIdJson = None            # validated JSON string form
+  if zitiJwtInput is not None:
+    # Expect enroll to return the identity JSON content
+    try:
+      enrolled = openziti.enroll(zitiJwtInput)
+      # Validate that the returned content is JSON
+      json.loads(enrolled)
+      zitiIdJson = enrolled
+      print("Obtained valid identity JSON from INPUT_ZITIJWT enrollment")
+    except Exception as e:
+      print(f"ERROR: Failed to enroll or parse identity from INPUT_ZITIJWT: {e}")
+      exit(1)
   else:
-    zitiId = os.getenv("INPUT_ZITIID")
+    # Support inline JSON or base64-encoded identity JSON from a single variable
+    zitiIdInput = os.getenv("INPUT_ZITIID")
 
-  if zitiId is None:
-    print("ERROR: no Ziti identity provided, set INPUT_ZITIID or INPUT_ZITIJWT")
-    exit(1)
+    # Prefer valid inline JSON if present
+    if zitiIdInput and _try_parse_json(zitiIdInput):
+      zitiIdJson = zitiIdInput
+      print("Detected valid inline JSON in INPUT_ZITIID")
+    else:
+      # Try decoding inline as base64 if provided and not valid JSON
+      decodedInline = _try_decode_b64_to_json_str(zitiIdInput) if zitiIdInput else None
+      if decodedInline is not None:
+        zitiIdJson = decodedInline
+        print("Detected base64-encoded identity in INPUT_ZITIID and decoded it")
+
+    if zitiIdJson is None:
+      print("ERROR: no Ziti identity provided, set INPUT_ZITIID (inline JSON or base64-encoded), or INPUT_ZITIJWT")
+      exit(1)
 
   idFilename = "id.json"
   with open(idFilename, 'w') as f:
-    f.write(zitiId)
-    openziti.load(idFilename)
+    f.write(zitiIdJson)
+
+  # Defer openziti.load() until inside the monkeypatch context to keep
+  # initialization/teardown paired and avoid double-free on shutdown.
 
   # Create webhook body
   try:
-    mwb = MattermostWebhookBody(username, icon, channel, eventName, eventJsonStr, actionRepo)
+    mwb = MattermostWebhookBody(username, icon, eventName, eventJson, actionRepo)
   except Exception as e:
     print(f"Exception creating webhook body: {e}")
     raise e
 
   # Post the webhook over Ziti
-  headers = {'Content-Type': 'application/json'}
-  data = mwb.dumpJson()
-  debug = os.getenv("ZHOOK_DEBUG", "").casefold() == "true"
+  # Build dict payload; requests will set Content-Type when using json=
+  payload = mwb.body
 
+  # Dry-run mode: print payload and exit
+  if args.dry_run:
+    print("=== DRY RUN MODE: Webhook payload ===")
+    print(f"URL: {url}")
+    print("Payload:")
+    print(json.dumps(payload, indent=2))
+    print("=== Dry run complete (not sent) ===")
+    sys.exit(0)
+
+  # Load the identity for Ziti operations
   try:
-      with openziti.monkeypatch():
-          if debug:
-              print(f"Posting webhook to {url} with headers {headers} and data {data}")
-          else:
-              print(f"Posting webhook to {url} with headers {headers}")
-
-          r = requests.post(url, headers=headers, data=data)
-          print(f"Response Status: {r.status_code}")
-
-          if debug:
-              print(f"Response HEADERS: {r.headers}")
-              print(f"Response CONTENT: {r.content}")
-
-          if 200 <= r.status_code < 300:
-              print(f"INFO: successfully posted. status code {r.status_code}")
-              sys.exit(0)
-          else:
-              print(f"ERROR: unexpected status code {r.status_code}")
-              sys.exit(1)
-
+    openziti.load(idFilename)
   except Exception as e:
-      print(f"Exception in webhook or ziti context: {e}")
-      sys.exit(0)
+    print(f"ERROR: Failed to load Ziti identity: {e}")
+    print(f"DEBUG: INPUT_ZITIID hint: {_safe_hint(os.getenv('INPUT_ZITIID'))}")
+    print(f"DEBUG: zitiIdJson len={len(zitiIdJson) if zitiIdJson else 0}")
+    raise e
+
+  # Post the webhook over Ziti
+  try:
+    print(f"Posting webhook to {url} with JSON payload keys {list(payload.keys())}")
+    response = doPost(url, payload)
+  except Exception as e:
+    print(f"Exception posting webhook: {e}")
+    raise e
