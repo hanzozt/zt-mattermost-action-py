@@ -302,6 +302,8 @@ class MattermostWebhookBody:
     if not version:
         self.attachment["text"] = "[ziti-fips] Pre-release published, but version not found in event."
         return
+    if not version.startswith("v"):
+        version = f"v{version}"
     repo = self.repo["full_name"]
     release_url = f"https://github.com/{repo}/releases/tag/{version}"
     self.body["text"] = f"FIPS Pre-release published by [{repo}](https://github.com/{repo})"
@@ -318,6 +320,8 @@ class MattermostWebhookBody:
     if not version:
         self.attachment["text"] = "[ziti-fips] Stable promotion, but version not found in event."
         return
+    if not version.startswith("v"):
+        version = f"v{version}"
     repo = self.repo["full_name"]
     release_url = f"https://github.com/{repo}/releases/tag/{version}"
     self.body["text"] = f"FIPS Release promoted to stable in [{repo}](https://github.com/{repo})"
