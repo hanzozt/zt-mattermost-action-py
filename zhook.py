@@ -17,6 +17,7 @@ class MattermostWebhookBody:
   issueThumbnail = "https://github.com/openziti/branding/blob/main/images/ziggy/closeups/Ziggy-has-an-Idea-Closeup.png?raw=true"
   # releaseThumbnail = "https://github.com/openziti/branding/blob/main/images/ziggy/png/Ziggy-Cash-Money-Closeup.png?raw=true"
   releaseThumbnail = "https://github.com/openziti/branding/blob/main/images/ziggy/closeups/Ziggy-Parties-Closeup.png?raw=true"
+  fipsReleaseThumbnail = "https://github.com/openziti/branding/blob/main/images/ziggy/closeups/Ziggy-The-Cop-Closeup.png?raw=true"
   watchThumbnail = "https://github.com/openziti/branding/blob/main/images/ziggy/closeups/Ziggy-is-Star-Struck.png?raw=true"
 
   prColor = "#32CD32"
@@ -72,8 +73,24 @@ class MattermostWebhookBody:
       self.addForkDetails()
     elif eventName == "release":
       self.addReleaseDetails()
+    elif eventName == "repository_dispatch":
+      event_type = self.event.get("action", None)
+      if event_type == "ziti_release":
+        self.addFipsReleaseDetails()
+      elif event_type == "ziti_promote_stable":
+        self.addFipsPromoteStableDetails()
+      else:
+        self.addDispatchFallbackDetails()
     elif eventName == "watch":
       self.addWatchDetails()
+    elif eventName == "workflow_dispatch":
+      workflow = self.event.get("workflow", "")
+      if "release" in workflow:
+        self.addFipsReleaseDetails()
+      elif "promote" in workflow:
+        self.addFipsPromoteStableDetails()
+      else:
+        self.addDispatchFallbackDetails()
     else:
       self.addDefaultDetails()
 
@@ -275,6 +292,65 @@ class MattermostWebhookBody:
       bodyText += f"\n{releaseBody}"
 
     self.attachment["text"] = bodyText
+
+  def addFipsReleaseDetails(self):
+    # Pre-release announcement (ziti_release or workflow_dispatch with release workflow)
+    # Check both client_payload (repository_dispatch) and inputs (workflow_dispatch)
+    payload = self.event.get("client_payload", {})
+    inputs = self.event.get("inputs", {})
+    version = payload.get("version") or inputs.get("version")
+    if not version:
+        self.attachment["text"] = "[ziti-fips] Pre-release published, but version not found in event."
+        return
+    if not version.startswith("v"):
+        version = f"v{version}"
+    repo = self.repo["full_name"]
+    release_url = f"https://github.com/{repo}/releases/tag/{version}"
+    self.body["text"] = f"FIPS Pre-release published by [{repo}](https://github.com/{repo})"
+    self.attachment["color"] = self.releaseColor
+    self.attachment["thumb_url"] = self.fipsReleaseThumbnail
+    self.attachment["text"] = f"FIPS Pre-release [{version}]({release_url}) is now available."
+
+  def addFipsPromoteStableDetails(self):
+    # Promotion to stable announcement (ziti_promote_stable or workflow_dispatch with promote workflow)
+    # Check both client_payload (repository_dispatch) and inputs (workflow_dispatch)
+    payload = self.event.get("client_payload", {})
+    inputs = self.event.get("inputs", {})
+    version = payload.get("version") or inputs.get("version")
+    if not version:
+        self.attachment["text"] = "[ziti-fips] Stable promotion, but version not found in event."
+        return
+    if not version.startswith("v"):
+        version = f"v{version}"
+    repo = self.repo["full_name"]
+    release_url = f"https://github.com/{repo}/releases/tag/{version}"
+    self.body["text"] = f"FIPS Release promoted to stable in [{repo}](https://github.com/{repo})"
+    self.attachment["color"] = self.releaseColor
+    self.attachment["thumb_url"] = self.fipsReleaseThumbnail
+    self.attachment["text"] = f"FIPS Release [{version}]({release_url}) has been promoted to stable."
+
+  def addDispatchFallbackDetails(self):
+    # Generic fallback for repository_dispatch or workflow_dispatch that don't match FIPS handlers
+    event_type = self.event.get("action", None)
+    workflow = self.event.get("workflow", "")
+    payload = self.event.get("client_payload", {})
+    inputs = self.event.get("inputs", {})
+    repo = self.repo["full_name"]
+
+    self.body["text"] = f"Dispatch event received by [{repo}](https://github.com/{repo})"
+    self.attachment["color"] = self.releaseColor
+
+    details = []
+    if event_type:
+      details.append(f"Event type: `{event_type}`")
+    if workflow:
+      details.append(f"Workflow: `{workflow}`")
+    if payload:
+      details.append(f"Payload: ```json\n{json.dumps(payload, indent=2)}\n```")
+    if inputs:
+      details.append(f"Inputs: ```json\n{json.dumps(inputs, indent=2)}\n```")
+
+    self.attachment["text"] = "\n".join(details) if details else "No additional details"
 
   def addWatchDetails(self):
     self.body["text"] = f"{self.createTitle()} #stargazer"
