@@ -6,19 +6,19 @@ import json
 import os
 import sys
 
-import openziti
+import hanzozt
 import requests
 
 
 class MattermostWebhookBody:
-  actionRepoIcon = "https://github.com/openziti/branding/blob/main/images/ziggy/png/Ziggy-Gits-It.png?raw=true"
-  prThumbnail = "https://github.com/openziti/branding/blob/main/images/ziggy/closeups/Ziggy-Chef-Closeup.png?raw=true"
-  prApprovedThumbnail = "https://github.com/openziti/branding/blob/main/images/ziggy/closeups/Ziggy-Dabbing.png?raw=true"
-  issueThumbnail = "https://github.com/openziti/branding/blob/main/images/ziggy/closeups/Ziggy-has-an-Idea-Closeup.png?raw=true"
-  # releaseThumbnail = "https://github.com/openziti/branding/blob/main/images/ziggy/png/Ziggy-Cash-Money-Closeup.png?raw=true"
-  releaseThumbnail = "https://github.com/openziti/branding/blob/main/images/ziggy/closeups/Ziggy-Parties-Closeup.png?raw=true"
-  fipsReleaseThumbnail = "https://github.com/openziti/branding/blob/main/images/ziggy/closeups/Ziggy-The-Cop-Closeup.png?raw=true"
-  watchThumbnail = "https://github.com/openziti/branding/blob/main/images/ziggy/closeups/Ziggy-is-Star-Struck.png?raw=true"
+  actionRepoIcon = "https://github.com/hanzozt/branding/blob/main/images/ziggy/png/Ziggy-Gits-It.png?raw=true"
+  prThumbnail = "https://github.com/hanzozt/branding/blob/main/images/ziggy/closeups/Ziggy-Chef-Closeup.png?raw=true"
+  prApprovedThumbnail = "https://github.com/hanzozt/branding/blob/main/images/ziggy/closeups/Ziggy-Dabbing.png?raw=true"
+  issueThumbnail = "https://github.com/hanzozt/branding/blob/main/images/ziggy/closeups/Ziggy-has-an-Idea-Closeup.png?raw=true"
+  # releaseThumbnail = "https://github.com/hanzozt/branding/blob/main/images/ziggy/png/Ziggy-Cash-Money-Closeup.png?raw=true"
+  releaseThumbnail = "https://github.com/hanzozt/branding/blob/main/images/ziggy/closeups/Ziggy-Parties-Closeup.png?raw=true"
+  fipsReleaseThumbnail = "https://github.com/hanzozt/branding/blob/main/images/ziggy/closeups/Ziggy-The-Cop-Closeup.png?raw=true"
+  watchThumbnail = "https://github.com/hanzozt/branding/blob/main/images/ziggy/closeups/Ziggy-is-Star-Struck.png?raw=true"
 
   prColor = "#32CD32"
   pushColor = "#708090"
@@ -598,7 +598,7 @@ def generate_test_event(event_type):
   return json.dumps(events[event_type])
 
 
-@openziti.zitify()
+@hanzozt.zitify()
 def doPost(url, payload):
   """Post webhook payload to the specified URL over Ziti."""
   # Single request doesn't need session management
@@ -714,7 +714,7 @@ Test Mode Examples:
   if zitiJwtInput is not None:
     # Expect enroll to return the identity JSON content
     try:
-      enrolled = openziti.enroll(zitiJwtInput)
+      enrolled = hanzozt.enroll(zitiJwtInput)
       # Validate that the returned content is JSON
       json.loads(enrolled)
       zitiIdJson = enrolled
@@ -745,7 +745,7 @@ Test Mode Examples:
   with open(idFilename, 'w') as f:
     f.write(zitiIdJson)
 
-  # Defer openziti.load() until inside the monkeypatch context to keep
+  # Defer hanzozt.load() until inside the monkeypatch context to keep
   # initialization/teardown paired and avoid double-free on shutdown.
 
   # Create webhook body
@@ -770,7 +770,7 @@ Test Mode Examples:
 
   # Load the identity for Ziti operations
   try:
-    openziti.load(idFilename)
+    hanzozt.load(idFilename)
   except Exception as e:
     print(f"ERROR: Failed to load Ziti identity: {e}")
     print(f"DEBUG: INPUT_ZITIID hint: {_safe_hint(os.getenv('INPUT_ZITIID'))}")

@@ -1,8 +1,8 @@
 # ziti-mattermost-action-py
 
-GitHub Action that posts to a Mattermost webhook endpoint over OpenZiti
+GitHub Action that posts to a Mattermost webhook endpoint over Hanzo ZT
 
-This GitHub workflow action uses [Ziti Python SDK](https://github.com/openziti/ziti-sdk-py) to post an event's payload information to a [Mattermost](https://mattermost.com/) instance over a `Ziti` connection. This allows the Mattermost server to remain private, i.e. not directly exposed to the internet.
+This GitHub workflow action uses [Ziti Python SDK](https://github.com/hanzozt/ziti-sdk-py) to post an event's payload information to a [Mattermost](https://mattermost.com/) instance over a `Ziti` connection. This allows the Mattermost server to remain private, i.e. not directly exposed to the internet.
 
 ## Usage
 
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Ziti Mattermost Action - Py
     steps:
-    - uses: openziti/ziti-mattermost-action-py@v1
+    - uses: hanzozt/ziti-mattermost-action-py@v1
       with:
         # Identity JSON containing key to access a Ziti network
         zitiId: ${{ secrets.ZITI_MATTERMOST_IDENTITY }}
@@ -45,13 +45,13 @@ jobs:
 
 #### `zitiId`
 
-The `zitiId` input is the JSON formatted string of an identity enrolled  in an OpenZiti Network.
+The `zitiId` input is the JSON formatted string of an identity enrolled  in an Hanzo ZT Network.
 
-The identity can be created by enrolling via the `ziti edge enroll path/to/jwt [flags]` command.  The `ziti` CLI executable can be obtained [here](https://github.com/openziti/ziti/releases/latest).
+The identity can be created by enrolling via the `ziti edge enroll path/to/jwt [flags]` command.  The `ziti` CLI executable can be obtained [here](https://github.com/hanzozt/ziti/releases/latest).
 
 #### `webhookUrl`
 
-This input value is a Mattermost "Incoming Webhook" URL available over an OpenZiti Network to the identity specified by `zitiId`. This URL should be configured in Mattermost to allow posting to any valid channel with any sender username. The default username will be the `sender.login` from the GitHub Action event.
+This input value is a Mattermost "Incoming Webhook" URL available over an Hanzo ZT Network to the identity specified by `zitiId`. This URL should be configured in Mattermost to allow posting to any valid channel with any sender username. The default username will be the `sender.login` from the GitHub Action event.
 
 ## Testing
 

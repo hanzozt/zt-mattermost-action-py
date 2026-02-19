@@ -1,2 +1,2 @@
 requests
-openziti==1.6.0
+hanzozt==1.6.0

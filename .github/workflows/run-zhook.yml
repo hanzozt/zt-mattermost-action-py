@@ -35,7 +35,7 @@ jobs:
 
       - name: Run Python Script Directly
         if: |
-          (github.repository_owner == 'openziti' || github.repository_owner == 'netfoundry')
+          (github.repository_owner == 'hanzozt' || github.repository_owner == 'netfoundry')
           && ((github.event_name != 'pull_request_review')
           || (github.event_name == 'pull_request_review' && github.event.review.state == 'approved'))
         env:
@@ -60,7 +60,7 @@ jobs:
       - name: Run in Docker with Core Dumps
         if: |
           always()
-          && (github.repository_owner == 'openziti' || github.repository_owner == 'netfoundry')
+          && (github.repository_owner == 'hanzozt' || github.repository_owner == 'netfoundry')
           && ((github.event_name != 'pull_request_review')
           || (github.event_name == 'pull_request_review' && github.event.review.state == 'approved'))
         shell: bash
@@ -110,7 +110,7 @@ jobs:
         uses: ./  # use self as action
         if: |
           always()
-          && (github.repository_owner == 'openziti' || github.repository_owner == 'netfoundry')
+          && (github.repository_owner == 'hanzozt' || github.repository_owner == 'netfoundry')
           && ((github.event_name != 'pull_request_review')
           || (github.event_name == 'pull_request_review' && github.event.review.state == 'approved'))
         with:
@@ -132,7 +132,7 @@ jobs:
           echo "DEBUG: LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"
           # list non-git files in the two uppermost levels of the workspace directory hierarchy
           find . -maxdepth 2 -path './.git' -prune -o -print
-          find $(python -c "import site; print(site.USER_SITE)") -path "*/openziti*" -name "*.so*" -type f -print0 | xargs -0r ldd
+          find $(python -c "import site; print(site.USER_SITE)") -path "*/hanzozt*" -name "*.so*" -type f -print0 | xargs -0r ldd
           
           # find core dumps produced by the kernel or valgrind
           shopt -s nullglob
