@@ -75,9 +75,9 @@ class MattermostWebhookBody:
       self.addReleaseDetails()
     elif eventName == "repository_dispatch":
       event_type = self.event.get("action", None)
-      if event_type == "ziti_release":
+      if event_type == "zt_release":
         self.addFipsReleaseDetails()
-      elif event_type == "ziti_promote_stable":
+      elif event_type == "zt_promote_stable":
         self.addFipsPromoteStableDetails()
       else:
         self.addDispatchFallbackDetails()
@@ -294,13 +294,13 @@ class MattermostWebhookBody:
     self.attachment["text"] = bodyText
 
   def addFipsReleaseDetails(self):
-    # Pre-release announcement (ziti_release or workflow_dispatch with release workflow)
+    # Pre-release announcement (zt_release or workflow_dispatch with release workflow)
     # Check both client_payload (repository_dispatch) and inputs (workflow_dispatch)
     payload = self.event.get("client_payload", {})
     inputs = self.event.get("inputs", {})
     version = payload.get("version") or inputs.get("version")
     if not version:
-        self.attachment["text"] = "[ziti-fips] Pre-release published, but version not found in event."
+        self.attachment["text"] = "[zt-fips] Pre-release published, but version not found in event."
         return
     if not version.startswith("v"):
         version = f"v{version}"
@@ -312,13 +312,13 @@ class MattermostWebhookBody:
     self.attachment["text"] = f"FIPS Pre-release [{version}]({release_url}) is now available."
 
   def addFipsPromoteStableDetails(self):
-    # Promotion to stable announcement (ziti_promote_stable or workflow_dispatch with promote workflow)
+    # Promotion to stable announcement (zt_promote_stable or workflow_dispatch with promote workflow)
     # Check both client_payload (repository_dispatch) and inputs (workflow_dispatch)
     payload = self.event.get("client_payload", {})
     inputs = self.event.get("inputs", {})
     version = payload.get("version") or inputs.get("version")
     if not version:
-        self.attachment["text"] = "[ziti-fips] Stable promotion, but version not found in event."
+        self.attachment["text"] = "[zt-fips] Stable promotion, but version not found in event."
         return
     if not version.startswith("v"):
         version = f"v{version}"
@@ -598,7 +598,7 @@ def generate_test_event(event_type):
   return json.dumps(events[event_type])
 
 
-@hanzozt.zitify()
+@hanzozt.ztify()
 def doPost(url, payload):
   """Post webhook payload to the specified URL over Ziti."""
   # Single request doesn't need session management
@@ -632,11 +632,11 @@ Optional:
 
 Test Mode Examples:
   # Quick test with push event
-  INPUT_ZITIID="$(< ziti-id.json)" INPUT_WEBHOOKURL="http://webhook.ziti/hooks/ID" \\
+  INPUT_ZITIID="$(< zt-id.json)" INPUT_WEBHOOKURL="http://webhook.zt/hooks/ID" \\
     python3 zhook.py --test
 
   # Test pull request with dry-run
-  INPUT_ZITIID="$(< ziti-id.json)" python3 zhook.py --test --event-type pull_request --dry-run
+  INPUT_ZITIID="$(< zt-id.json)" python3 zhook.py --test --event-type pull_request --dry-run
 
   # List available event types
   python3 zhook.py --help
@@ -703,47 +703,47 @@ Test Mode Examples:
   icon = os.getenv("INPUT_SENDERICONURL")
   actionRepo = os.getenv("GITHUB_ACTION_REPOSITORY")
   eventName = os.getenv("GITHUB_EVENT_NAME")
-  zitiLogLevel = os.getenv("INPUT_ZITILOGLEVEL")
-  if zitiLogLevel is not None:
-    os.environ["ZITI_LOG"] = zitiLogLevel
-    os.environ["TLSUV_DEBUG"] = zitiLogLevel
+  ztLogLevel = os.getenv("INPUT_ZITILOGLEVEL")
+  if ztLogLevel is not None:
+    os.environ["ZITI_LOG"] = ztLogLevel
+    os.environ["TLSUV_DEBUG"] = ztLogLevel
 
   # Set up Ziti identity
-  zitiJwtInput = os.getenv("INPUT_ZITIJWT")
-  zitiIdJson = None            # validated JSON string form
-  if zitiJwtInput is not None:
+  ztJwtInput = os.getenv("INPUT_ZITIJWT")
+  ztIdJson = None            # validated JSON string form
+  if ztJwtInput is not None:
     # Expect enroll to return the identity JSON content
     try:
-      enrolled = hanzozt.enroll(zitiJwtInput)
+      enrolled = hanzozt.enroll(ztJwtInput)
       # Validate that the returned content is JSON
       json.loads(enrolled)
-      zitiIdJson = enrolled
+      ztIdJson = enrolled
       print("Obtained valid identity JSON from INPUT_ZITIJWT enrollment")
     except Exception as e:
       print(f"ERROR: Failed to enroll or parse identity from INPUT_ZITIJWT: {e}")
       exit(1)
   else:
     # Support inline JSON or base64-encoded identity JSON from a single variable
-    zitiIdInput = os.getenv("INPUT_ZITIID")
+    ztIdInput = os.getenv("INPUT_ZITIID")
 
     # Prefer valid inline JSON if present
-    if zitiIdInput and _try_parse_json(zitiIdInput):
-      zitiIdJson = zitiIdInput
+    if ztIdInput and _try_parse_json(ztIdInput):
+      ztIdJson = ztIdInput
       print("Detected valid inline JSON in INPUT_ZITIID")
     else:
       # Try decoding inline as base64 if provided and not valid JSON
-      decodedInline = _try_decode_b64_to_json_str(zitiIdInput) if zitiIdInput else None
+      decodedInline = _try_decode_b64_to_json_str(ztIdInput) if ztIdInput else None
       if decodedInline is not None:
-        zitiIdJson = decodedInline
+        ztIdJson = decodedInline
         print("Detected base64-encoded identity in INPUT_ZITIID and decoded it")
 
-    if zitiIdJson is None:
+    if ztIdJson is None:
       print("ERROR: no Ziti identity provided, set INPUT_ZITIID (inline JSON or base64-encoded), or INPUT_ZITIJWT")
       exit(1)
 
   idFilename = "id.json"
   with open(idFilename, 'w') as f:
-    f.write(zitiIdJson)
+    f.write(ztIdJson)
 
   # Defer hanzozt.load() until inside the monkeypatch context to keep
   # initialization/teardown paired and avoid double-free on shutdown.
@@ -774,7 +774,7 @@ Test Mode Examples:
   except Exception as e:
     print(f"ERROR: Failed to load Ziti identity: {e}")
     print(f"DEBUG: INPUT_ZITIID hint: {_safe_hint(os.getenv('INPUT_ZITIID'))}")
-    print(f"DEBUG: zitiIdJson len={len(zitiIdJson) if zitiIdJson else 0}")
+    print(f"DEBUG: ztIdJson len={len(ztIdJson) if ztIdJson else 0}")
     raise e
 
   # Post the webhook over Ziti

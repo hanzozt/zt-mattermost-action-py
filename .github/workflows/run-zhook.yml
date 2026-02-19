@@ -114,12 +114,12 @@ jobs:
           && ((github.event_name != 'pull_request_review')
           || (github.event_name == 'pull_request_review' && github.event.review.state == 'approved'))
         with:
-          zitiId: ${{ secrets.ZITI_MATTERMOST_IDENTITY }}
+          ztId: ${{ secrets.ZITI_MATTERMOST_IDENTITY }}
           webhookUrl: ${{ secrets.ZHOOK_URL_DEV_NOTIFICATIONS }}
           eventJson: ${{ toJson(github.event) }}
           senderUsername: GitHubZ
           senderIconUrl: https://github.com/fluidicon.png
-          zitiLogLevel: 6
+          ztLogLevel: 6
 
       - name: Print Debug Info
         if: always()

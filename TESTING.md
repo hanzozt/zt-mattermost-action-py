@@ -6,8 +6,8 @@ Run tests with dummy event data using the `--test` flag:
 
 ```bash
 # Basic test with push event
-INPUT_ZITIID="$(< ziti-id.json)" \
-INPUT_WEBHOOKURL="http://webhook.mattermost.ziti.internal/hooks/<incoming webhook secret>" \
+INPUT_ZITIID="$(< zt-id.json)" \
+INPUT_WEBHOOKURL="http://webhook.mattermost.zt.internal/hooks/<incoming webhook secret>" \
 python3 zhook.py --test
 
 # Test different event types

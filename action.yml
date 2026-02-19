@@ -4,7 +4,7 @@ branding:
   icon: zap
   color: red
 inputs:
-  zitiId:
+  ztId:
     description: Identity JSON for an enrolled Ziti endpoint
     required: true
   webhookUrl:
@@ -25,7 +25,7 @@ inputs:
     description: Mattermost channel (ignored because incoming webhooks are locked to a channel)
     required: false
     default: ""
-  zitiLogLevel:
+  ztLogLevel:
     description: Ziti log level
     required: false
     default: "3"
